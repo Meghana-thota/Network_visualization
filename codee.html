@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Network Visualization using d3.js</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #f9f9f9;
+        }
+        .node { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
+        .highlighted { stroke-width: 3px; }
+        .link { stroke: rgba(203, 200, 200, 0.886); stroke-opacity: 0.4; } 
+        .nodeLabel { pointer-events: none; fill: #080000; }
+        .faded { opacity: 0.1; }
+    </style>
+</head>
+<body>
+    <svg></svg>
+    <script>
+     
+        d3.json("https://raw.githubusercontent.com/Meghana-thota/Network_visualization/main/Emails_Graph_kmeans.json").then(function(graph) {
+            const width = window.outerWidth;
+            const height = window.outerHeight;
+
+            var svg = d3.select("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("viewBox", [-(width * 0.93) / 2, -(height * 0.94) / 2, width * 0.93, height * 0.94]);
+
+            var color = d3.scaleOrdinal(d3.schemeCategory10);
+            var radius = d3.scaleSqrt().range([3, 6]);
+     
+
+            var simulation = d3.forceSimulation(graph.nodes)
+                .force("link", d3.forceLink(graph.links).id(d => d.id).distance(200).strength(0.9))
+                .force("charge", d3.forceManyBody().strength(-800)) 
+                .force("center", d3.forceCenter(0, 0))
+                .force("collide", d3.forceCollide().radius(d => radius(d.degree) + 20).strength(0.5))
+                .force('x', d3.forceX(0).strength(2.5))
+                .force('y', d3.forceY(0).strength(2.5));
+
+            var link = svg.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(graph.links)
+                .enter().append("line")
+                .attr("class", "link");
+
+            var node = svg.append("g")
+                .attr("class", "nodes")
+                .selectAll("circle")
+                .data(graph.nodes)
+                .enter().append("circle")
+                .attr("class", "node")
+                .attr("r", d => radius(d.degree))
+                .attr("fill", d => color(d.cluster_label))
+                .call(drag(simulation))
+                .on("mouseover", mouseover)
+                .on("mouseout", mouseout);
+            var fontSizeScale = d3.scaleSqrt().domain(d3.extent(graph.nodes, d => d.degree)).range([6, 12]); 
+
+            var labels = svg.append("g")
+                .attr("class", "labels")
+                .selectAll("text")
+                .data(graph.nodes)
+                .enter().append("text")
+                .attr("class", "nodeLabel")
+                .text(d => d.id)           
+                .attr("font-size", d => fontSizeScale(d.degree),+'px') 
+               
+
+            simulation.on("tick", () => {
+                link.attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                node.attr("cx", d => d.x)
+                    .attr("cy", d => d.y);
+
+                labels.attr("x", d => d.x)
+                      .attr("y", d => d.y);
+            });
+
+            function drag(simulation) {
+                function dragstarted(event, d) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                }
+
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }
+
+                return d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended);
+            }
+
+            function mouseover(event, d) {
+                node.classed("faded", true); 
+                node.classed("highlighted", false); 
+                var selectedCluster = d.cluster_label; 
+                node.filter(n => n.cluster_label === selectedCluster).classed("highlighted", true).classed("faded", false); 
+
+                labels.classed("faded", true);
+                labels.filter(l => l.cluster_label === selectedCluster).classed("highlighted", true).classed("faded", false);
+            }
+
+            function mouseout() {
+                node.classed("faded", false); 
+                node.classed("highlighted", false); 
+
+                labels.classed("faded", false);
+                labels.classed("highlighted", false); 
+            }
+
+            var zoom = d3.zoom()
+                .scaleExtent([0.5, 9])
+                .on("zoom", zoomed);
+
+            svg.call(zoom);
+
+            function zoomed(event) {
+                svg.attr("transform", event.transform);
+            }
+
+            graph.nodes.forEach(function(d, i) {
+                d.x = Math.cos(i / graph.nodes.length * 2 * Math.PI) * 250; 
+                d.y = Math.sin(i / graph.nodes.length * 2 * Math.PI) * 250; 
+            });
+            simulation.alpha(0.4).restart(); 
+        });
+    </script>
+</body>
+</html>
